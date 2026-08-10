@@ -13,7 +13,7 @@ Internal AI knowledge-base assistant for a Ukrainian law firm — real hybrid RA
 
 ## Features
 
-- **Real hybrid search** — vector similarity (pgvector HNSW) fused with full-text search (Postgres GIN/BM25-style ranking) via Reciprocal Rank Fusion, not vector-only.
+- **Real hybrid search** — vector similarity (pgvector HNSW) fused with lexical full-text search (Postgres GIN, `ts_rank_cd`) via Reciprocal Rank Fusion, not vector-only.
 - **Role-based retrieval** — access control enforced inside the SQL query itself, before any chunk reaches the LLM.
 - **Reranking** — top candidates re-scored by a cross-encoder (Jina Reranker) before being handed to the generator.
 - **Sibling-chunk expansion** — pulls in a surviving chunk's neighboring chunks from the same document so procedural detail one paragraph away isn't lost.
@@ -34,7 +34,7 @@ flowchart TD
 
     subgraph Query["Query time (per chat request)"]
         E[User query + role] --> F["Embed query (Jina v3)"]
-        F --> G["Hybrid search: vector + BM25<br/>fused via RRF, ROLE FILTER in SQL"]
+        F --> G["Hybrid search: vector + lexical FTS<br/>fused via RRF, ROLE FILTER in SQL"]
         D -.-> G
         G --> H["Rerank top candidates<br/>(Jina Reranker) → top 5"]
         H --> I["Sibling-chunk expansion<br/>(cap 8 chunks)"]
@@ -90,7 +90,7 @@ Access is enforced by an SQL `WHERE d.roles IS NULL OR user_role = ANY(d.roles)`
 
 ## Design decisions
 
-- **Hybrid search over pure vector** — legal queries mix exact terminology (article numbers, defined terms) with paraphrased questions; BM25 catches the former, embeddings the latter. RRF fuses both without needing a manually tuned weight.
+- **Hybrid search over pure vector** — legal queries mix exact terminology (article numbers, defined terms) with paraphrased questions; lexical FTS (`ts_rank_cd`) catches the former, embeddings the latter. RRF fuses both without needing a manually tuned weight.
 - **RBAC in the SQL retrieval layer, not post-filtering** — restricted content is physically absent from what the LLM ever sees, not redacted after the fact. This removes an entire class of prompt-leakage risk.
 - **Explicit no-answer, not best-effort guessing** — in a legal context, a confident wrong answer is worse than a clear refusal. The system prompt forces an exact refusal phrase when retrieval returns nothing relevant, and the API short-circuits before even calling the LLM.
 - **Traces stored in Postgres, not a separate observability stack** — each request's cost/quality facts (latencies per stage, token counts, provider-reported `$` cost, relevance scores) are naturally relational and high-cardinality; querying them alongside the corpus needs no extra infrastructure for a project this size.

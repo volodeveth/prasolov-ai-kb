@@ -35,7 +35,7 @@ const LANE1_BOXES: DiagramBox[] = [
 const LANE2_BOXES: DiagramBox[] = [
   { lines: ["Питання"], width: 110 },
   { lines: ["Embedding"], width: 125 },
-  { lines: ["Гібридний пошук", "(vector + BM25 → RRF)"], width: 220 },
+  { lines: ["Гібридний пошук", "(vector + FTS → RRF)"], width: 220 },
   { lines: ["Фільтр ролей", "(RBAC)"], width: 155 },
   { lines: ["Jina Rerank", "(top-5)"], width: 145 },
   { lines: ["DeepSeek V4 Pro"], width: 180 },
