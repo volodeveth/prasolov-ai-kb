@@ -28,4 +28,11 @@ describe("parseCorpusFile", () => {
     const bad = raw.replace("Регламенти", "Інше");
     expect(() => parseCorpusFile(bad, "test-doc.md")).toThrow();
   });
+  it("strips surrounding quotes from a quoted title", () => {
+    const quoted = raw.replace(
+      "title: Тестовий документ",
+      'title: "Тест: з лапками"'
+    );
+    expect(parseCorpusFile(quoted, "test-doc.md").title).toBe("Тест: з лапками");
+  });
 });

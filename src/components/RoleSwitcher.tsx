@@ -60,6 +60,7 @@ export function RoleSwitcherMobile() {
       <select
         value={role}
         onChange={(e) => setRole(e.target.value as Role)}
+        aria-label="Роль співробітника"
         className="rounded-md border border-navy-700 bg-navy-800 px-2 py-1.5 font-body text-[13px] text-ivory focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
       >
         {ROLE_ORDER.map((r) => (

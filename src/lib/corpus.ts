@@ -37,6 +37,26 @@ export function parseCorpusFile(raw: string, filename: string): CorpusDoc {
 
   const [, frontmatterBlock, body] = match;
 
+  /**
+   * YAML scalars are often written quoted ("Стаття 130 КУпАП...") even
+   * though this parser doesn't require it. Strip one matching pair of
+   * surrounding quotes so downstream consumers (titles rendered in the UI,
+   * stored in kb_documents.title) don't carry literal quote characters.
+   * Only strips a single matching pair at the very ends of the value —
+   * quotes appearing mid-value (e.g. an em-dash quote inside a title) are
+   * left untouched.
+   */
+  function stripSurroundingQuotes(value: string): string {
+    if (value.length >= 2) {
+      const first = value[0];
+      const last = value[value.length - 1];
+      if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+        return value.slice(1, -1);
+      }
+    }
+    return value;
+  }
+
   const fields: Record<string, string> = {};
   for (const line of frontmatterBlock.split("\n")) {
     const trimmed = line.trim();
@@ -45,7 +65,7 @@ export function parseCorpusFile(raw: string, filename: string): CorpusDoc {
     if (colonIndex === -1) continue;
     const key = trimmed.slice(0, colonIndex).trim();
     const value = trimmed.slice(colonIndex + 1).trim();
-    fields[key] = value;
+    fields[key] = stripSurroundingQuotes(value);
   }
 
   const slug = fields.slug;

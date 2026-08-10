@@ -8,6 +8,24 @@ interface SourcePanelProps {
   onClose: () => void;
 }
 
+/**
+ * Display-only cleanup of a raw markdown chunk excerpt: strips leading
+ * "#"..."######" header markers at the start of a line (the underlying
+ * chunk text is a raw markdown slice, so a chunk boundary can land right on
+ * a "## Section" heading) and drops stray "---" frontmatter-delimiter
+ * leftover lines, then collapses the blank lines that removal leaves
+ * behind. Does not touch stored data — kb_documents.content is untouched;
+ * this only affects what the case-file card renders.
+ */
+function cleanExcerpt(text: string): string {
+  const cleaned = text
+    .split("\n")
+    .map((line) => line.replace(/^#{1,6}\s+/, ""))
+    .filter((line) => line.trim() !== "---")
+    .join("\n");
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // Right-side "case-file card" drawer for a cited source. Per the design
 // direction: navy-900, left border brass-deep, category as an uppercase
 // letterspaced stamp, title in the display serif, chunk text in a bordered
@@ -82,8 +100,8 @@ export function SourcePanel({ source, onClose }: SourcePanelProps) {
 
             <h2 className="mt-4">{displaySource.title}</h2>
 
-            <blockquote className="mt-4 rounded-md border border-navy-700 bg-navy-800 p-4 font-body text-[15px] leading-6 text-ivory">
-              {displaySource.chunk}
+            <blockquote className="mt-4 whitespace-pre-wrap rounded-md border border-navy-700 bg-navy-800 p-4 font-body text-[15px] leading-6 text-ivory">
+              {cleanExcerpt(displaySource.chunk)}
             </blockquote>
 
             <p className="mt-4 font-data text-[13px] text-ivory-dim">
