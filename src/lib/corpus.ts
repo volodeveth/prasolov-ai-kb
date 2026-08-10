@@ -70,30 +70,36 @@ export function parseCorpusFile(raw: string, filename: string): CorpusDoc {
     throw new Error(`${filename}: відсутнє поле updated`);
   }
 
+  function isRole(value: string): value is Role {
+    return (ROLES as readonly string[]).includes(value);
+  }
+
   let roles: Role[] | null = null;
   const rolesRaw = fields.roles;
   if (rolesRaw) {
     const listMatch = rolesRaw.match(/^\[(.*)\]$/);
     const inner = listMatch ? listMatch[1] : rolesRaw;
-    roles = inner
+    const rawRoles: string[] = inner
       .split(",")
       .map((r) => r.trim())
       .filter(Boolean);
 
-    for (const role of roles) {
-      if (!(ROLES as readonly string[]).includes(role)) {
+    for (const role of rawRoles) {
+      if (!isRole(role)) {
         throw new Error(
           `${filename}: невідома роль "${role}". Дозволені: ${ROLES.join(", ")}`
         );
       }
     }
+
+    roles = rawRoles.filter(isRole);
   }
 
   return {
     slug,
     title,
     category: category as Category,
-    roles: roles as Role[] | null,
+    roles,
     updated,
     body: body.trim(),
   };
