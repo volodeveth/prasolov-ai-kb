@@ -1,1 +1,77 @@
 @import "tailwindcss";
+
+:root {
+  --navy-950: #0f1329;
+  --navy-900: #171c38;
+  --navy-800: #232a52;
+  --navy-700: #2f3768;
+  --ivory: #f2eee3;
+  --ivory-dim: #a9aabf;
+  --brass: #d7b46a;
+  --brass-deep: #b8934a;
+  --ok: #8fbf9a;
+  --err: #d98a7e;
+}
+
+@theme inline {
+  --color-navy-950: var(--navy-950);
+  --color-navy-900: var(--navy-900);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-ivory: var(--ivory);
+  --color-ivory-dim: var(--ivory-dim);
+  --color-brass: var(--brass);
+  --color-brass-deep: var(--brass-deep);
+  --color-ok: var(--ok);
+  --color-err: var(--err);
+
+  --font-display: var(--font-literata);
+  --font-body: var(--font-manrope);
+  --font-data: var(--font-jetbrains-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--navy-950);
+  color: var(--ivory);
+  font-family: var(--font-body), sans-serif;
+  font-size: 15px;
+  line-height: 24px;
+}
+
+h1 {
+  font-family: var(--font-display), serif;
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 34px;
+}
+
+h2 {
+  font-family: var(--font-display), serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+}
+
+small {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
