@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { retrieve, type Role, type RankedChunk } from "@/lib/search";
 import { ROLES } from "@/lib/corpus";
-import { buildMessages, generateAnswerStream } from "@/lib/llm";
+import { buildMessages, generateAnswerStream, NO_ANSWER_PHRASE } from "@/lib/llm";
 import { extractCitedIndexes } from "@/lib/citations";
 import { hashIp, checkRateLimit } from "@/lib/rate-limit";
 import { writeTrace, type KbTrace } from "@/lib/tracer";
@@ -12,12 +12,6 @@ export const maxDuration = 60;
 const MAX_QUERY_LENGTH = 500;
 const SOURCE_CHUNK_PREVIEW_LENGTH = 600;
 const RATE_LIMIT_MESSAGE = "Ліміт демо: 20 запитів на годину.";
-
-// Must match the SYSTEM_PROMPT rule-3 refusal phrase in src/lib/llm.ts
-// verbatim — retrieval already told us there's nothing to answer with, so
-// we short-circuit here instead of paying for an LLM call to say the same.
-const NO_ANSWER_PHRASE =
-  "У базі знань немає відповіді на це питання. Зверніться до відповідального за напрям або поставте питання інакше.";
 
 interface ChatBody {
   query?: unknown;
@@ -256,6 +250,14 @@ export async function POST(req: Request) {
           ? relevanceScores.reduce((sum, s) => sum + s, 0) / relevanceScores.length
           : null;
 
+        // Retrieval found chunks, but the model itself decided none of them
+        // actually answered the question and emitted the refusal phrase
+        // verbatim (rule 4 of SYSTEM_PROMPT). That's a no-answer outcome,
+        // not a success — /analytics must not count it as one. Cost/tokens/
+        // timings are kept as recorded; only the status/analytics framing
+        // changes. The empty-retrieval path above already gets this right.
+        const isLlmNoAnswer = answer.trim().startsWith(NO_ANSWER_PHRASE);
+
         await writeTraceOnce({
           trace_id: traceId,
           role,
@@ -275,7 +277,7 @@ export async function POST(req: Request) {
           llm_prompt_tokens: usage.promptTokens,
           llm_completion_tokens: usage.completionTokens,
           cost_usd: usage.costUsd,
-          status: "success",
+          status: isLlmNoAnswer ? "no_answer" : "success",
           ip_hash: ipHash,
         });
       } catch (err) {
