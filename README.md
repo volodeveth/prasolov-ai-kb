@@ -1,111 +1,111 @@
 # Prasolov AI Knowledge Base
 
-Internal AI knowledge-base assistant for a Ukrainian law firm — real hybrid RAG, role-based retrieval, and per-request observability, built over a synthetic 24-document corpus.
+Внутрішній AI-асистент бази знань для української юридичної фірми — справжній гібридний RAG, рольовий доступ до пошуку та спостережуваність на рівні кожного запиту, побудовані на синтетичному корпусі з 24 документів.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-pgvector-3ECF8E?logo=supabase)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38BDF8?logo=tailwindcss)](https://tailwindcss.com/)
 
-**Live demo:** [prasolov-ai-kb.vercel.app](https://prasolov-ai-kb.vercel.app)
+**Онлайн-демо:** [prasolov-ai-kb.vercel.app](https://prasolov-ai-kb.vercel.app)
 
-> Built as a test assignment for **Prasolov & Partners**, an Art. 130 КУпАП (driving-under-influence administrative offense) defense firm. The corpus (regulations, job descriptions, scripts, FAQs, policies) is entirely synthetic — no real firm documents were used.
+> Створено як тестове завдання для **«Прасолов та Партнери»** — фірми, що спеціалізується на захисті у справах за ст. 130 КУпАП (керування транспортом у стані сп’яніння). Корпус (регламенти, посадові інструкції, скрипти, FAQ, політики) повністю синтетичний — реальні документи фірми не використовувались.
 
-## Features
+## Можливості
 
-- **Real hybrid search** — vector similarity (pgvector HNSW) fused with lexical full-text search (Postgres GIN, `ts_rank_cd`) via Reciprocal Rank Fusion, not vector-only.
-- **Role-based retrieval** — access control enforced inside the SQL query itself, before any chunk reaches the LLM.
-- **Reranking** — top candidates re-scored by a cross-encoder (Jina Reranker) before being handed to the generator.
-- **Sibling-chunk expansion** — pulls in a surviving chunk's neighboring chunks from the same document so procedural detail one paragraph away isn't lost.
-- **Grounded generation with citations** — every factual sentence carries a `[n]` marker traceable to a source chunk; the model must say so explicitly when the context has no answer.
-- **Streaming responses** — NDJSON stream (`sources` → `token`× → `done`) with client- and server-side abort wiring.
-- **Full request tracing** — every call's stage latencies, token counts, and provider-reported cost land in Postgres, visualized at `/analytics`.
-- **Guardrails** — prompt-injection resistance, hourly per-IP rate limiting (hashed IPs), and an output token cap.
+- **Справжній гібридний пошук** — векторна подібність (pgvector HNSW), об’єднана з лексичним повнотекстовим пошуком (Postgres GIN, `ts_rank_cd`) через Reciprocal Rank Fusion, а не лише вектори.
+- **Рольовий доступ до пошуку** — контроль доступу застосовується всередині самого SQL-запиту, ще до того, як будь-який чанк потрапить до LLM.
+- **Реранк** — топ-кандидати переоцінюються крос-енкодером (Jina Reranker) перед передачею генератору.
+- **Розширення сусідніми чанками** — підтягує сусідні чанки того самого документа, щоб процедурна деталь за абзац від головного факту не загубилась.
+- **Генерація на основі контексту з цитатами** — кожне фактичне твердження супроводжується міткою `[n]`, що веде до конкретного чанка-джерела; за відсутності відповіді в контексті модель зобов’язана сказати про це прямо.
+- **Стрімінг відповідей** — NDJSON-стрім (`sources` → `token`× → `done`) з узгодженим скасуванням на клієнті та сервері.
+- **Повний трейсинг запитів** — латентність по стадіях, кількість токенів і вартість від провайдера для кожного виклику потрапляють у Postgres і візуалізуються на `/analytics`.
+- **Захисні механізми** — стійкість до prompt injection, погодинний rate limit на IP (хешовані IP) та обмеження на кількість токенів відповіді.
 
-## Architecture
+## Архітектура
 
 ```mermaid
 flowchart TD
-    subgraph Ingest["Ingestion (offline, npm run ingest)"]
-        A[24 synthetic UA legal-firm docs] --> B["Chunk: 2000 chars / 400 overlap"]
-        B --> C["Embed: Jina Embeddings v3 (1024d)"]
+    subgraph Ingest["Інжест (офлайн, npm run ingest)"]
+        A[24 синтетичні документи української юрфірми] --> B["Чанкінг: 2000 символів / 400 перекриття"]
+        B --> C["Ембединг: Jina Embeddings v3 (1024d)"]
         C --> D[(Supabase Postgres<br/>pgvector + GIN FTS)]
     end
 
-    subgraph Query["Query time (per chat request)"]
-        E[User query + role] --> F["Embed query (Jina v3)"]
-        F --> G["Hybrid search: vector + lexical FTS<br/>fused via RRF, ROLE FILTER in SQL"]
+    subgraph Query["Час запиту (на кожен чат-запит)"]
+        E[Запит користувача + роль] --> F["Ембединг запиту (Jina v3)"]
+        F --> G["Гібридний пошук: vector + лексичний FTS<br/>об’єднання через RRF, ФІЛЬТР РОЛЕЙ у SQL"]
         D -.-> G
-        G --> H["Rerank top candidates<br/>(Jina Reranker) → top 5"]
-        H --> I["Sibling-chunk expansion<br/>(cap 8 chunks)"]
-        I --> J["Grounded generation<br/>DeepSeek V4 Pro via OpenRouter<br/>+ [n] citations"]
-        J --> K["NDJSON stream to client"]
-        J --> L[(kb_traces:<br/>latencies, tokens, cost)]
+        G --> H["Реранк топ-кандидатів<br/>(Jina Reranker) → топ-5"]
+        H --> I["Розширення сусідніми чанками<br/>(ліміт 8 чанків)"]
+        I --> J["Генерація на основі контексту<br/>DeepSeek V4 Pro через OpenRouter<br/>+ цитати [n]"]
+        J --> K["NDJSON-стрім клієнту"]
+        J --> L[(kb_traces:<br/>латентність, токени, вартість)]
         L --> M["/analytics"]
     end
 ```
 
-## Request flow (single chat call)
+## Хід одного запиту в чаті
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant A as API route (/api/chat)
+    participant C as Клієнт
+    participant A as API-роут (/api/chat)
     participant J1 as Jina Embeddings
     participant S as Supabase (RPC)
     participant J2 as Jina Reranker
     participant O as OpenRouter (DeepSeek V4 Pro)
     participant T as kb_traces
 
-    C->>A: POST query + role
-    A->>A: rate-limit check (hashed IP, 20/h)
-    A->>J1: embed(query)
-    J1-->>A: query vector (1024d)
+    C->>A: POST запит + роль
+    A->>A: перевірка rate limit (хеш IP, 20/год)
+    A->>J1: embed(запит)
+    J1-->>A: вектор запиту (1024d)
     A->>S: kb_hybrid_search(query_text, embedding, role)
-    Note over S: role filter applied in SQL —<br/>restricted docs never leave the DB
-    S-->>A: top candidates (RRF-fused)
-    A->>J2: rerank(query, candidates)
-    J2-->>A: top 5, scored
-    A->>A: sibling-chunk expansion (cap 8)
-    alt no relevant chunks
-        A-->>C: NDJSON: explicit no-answer phrase
-    else relevant context found
-        A->>O: stream completion (grounded prompt)
-        O-->>A: token stream
+    Note over S: фільтр ролей застосовується у SQL —<br/>обмежені документи ніколи не покидають БД
+    S-->>A: топ-кандидати (об’єднані через RRF)
+    A->>J2: rerank(запит, кандидати)
+    J2-->>A: топ-5, з оцінками
+    A->>A: розширення сусідніми чанками (ліміт 8)
+    alt релевантних чанків немає
+        A-->>C: NDJSON: явна фраза «немає відповіді»
+    else релевантний контекст знайдено
+        A->>O: стрім генерації (промпт на основі контексту)
+        O-->>A: потік токенів
         A-->>C: NDJSON: sources, token×, done
     end
-    A->>T: write trace (latencies, tokens, cost, status)
+    A->>T: запис трейсу (латентність, токени, вартість, статус)
 ```
 
-## RBAC
+## Контроль доступу (RBAC)
 
-Access is enforced by an SQL `WHERE d.roles IS NULL OR user_role = ANY(d.roles)` filter inside `kb_hybrid_search()` — restricted documents are excluded from the candidate set at the database layer, so they never reach reranking, the prompt, or the LLM context.
+Доступ контролюється SQL-фільтром `WHERE d.roles IS NULL OR user_role = ANY(d.roles)` усередині `kb_hybrid_search()` — обмежені документи виключаються з набору кандидатів ще на рівні бази даних, тож вони ніколи не потрапляють ні до реранку, ні до промпту, ні в контекст LLM.
 
-| Role | Example query | Access |
+| Роль | Приклад запиту | Доступ |
 |---|---|---|
-| `partner` | "Who assigns the lawyer on a new case?" | Full access, including `roles: [partner]` docs (e.g. new-case assignment regulation) |
-| `lawyer` | "What do I do if a state authority calls?" | Access to `[lawyer, partner]` docs (e.g. state-authority-request script, engagement regulations) plus all unrestricted docs |
-| `assistant` | "Who assigns the lawyer on a new case?" | Restricted docs excluded from retrieval → explicit no-answer response |
-| `hr` | "What are the per-diem rates for domestic travel?" | Full access to unrestricted HR/ops docs (FAQs, leave policy); no access to partner/lawyer-restricted docs |
+| `partner` | «Хто призначає юриста на нову справу?» | Повний доступ, включно з документами `roles: [partner]` (наприклад, регламент призначення на нову справу) |
+| `lawyer` | «Що робити, якщо телефонує представник держоргану?» | Доступ до документів `[lawyer, partner]` (наприклад, скрипт запиту від держоргану, регламент доручень) плюс усі необмежені документи |
+| `assistant` | «Хто призначає юриста на нову справу?» | Обмежені документи виключено з пошуку → явна відповідь «немає відповіді» |
+| `hr` | «Які добові при відрядженні по Україні?» | Повний доступ до необмежених HR/офісних документів (FAQ, регламент відпусток); без доступу до документів, обмежених для partner/lawyer |
 
-## Design decisions
+## Дизайн-рішення
 
-- **Hybrid search over pure vector** — legal queries mix exact terminology (article numbers, defined terms) with paraphrased questions; lexical FTS (`ts_rank_cd`) catches the former, embeddings the latter. RRF fuses both without needing a manually tuned weight.
-- **RBAC in the SQL retrieval layer, not post-filtering** — restricted content is physically absent from what the LLM ever sees, not redacted after the fact. This removes an entire class of prompt-leakage risk.
-- **Explicit no-answer, not best-effort guessing** — in a legal context, a confident wrong answer is worse than a clear refusal. The system prompt forces an exact refusal phrase when retrieval returns nothing relevant, and the API short-circuits before even calling the LLM.
-- **Traces stored in Postgres, not a separate observability stack** — each request's cost/quality facts (latencies per stage, token counts, provider-reported `$` cost, relevance scores) are naturally relational and high-cardinality; querying them alongside the corpus needs no extra infrastructure for a project this size.
-- **Sibling-chunk expansion** — each doc is split into a couple of chunks; a fact and its procedural conditions (deadlines, required approvals) can land in different chunks. Pulling in a surviving chunk's siblings (capped, decayed relevance) recovers procedural completeness without re-running retrieval.
-- **FTS with Postgres' `'simple'` config** — stock Postgres has no Ukrainian stemming dictionary. `'simple'` (exact token matching, no stemming) is a documented, deliberate tradeoff over shipping a custom Ukrainian dictionary for a demo corpus.
+- **Гібридний пошук замість лише векторного** — юридичні запити поєднують точну термінологію (номери статей, визначені терміни) з перефразованими питаннями; лексичний FTS (`ts_rank_cd`) ловить перше, ембединги — друге. RRF об’єднує обидва підходи без потреби вручну підбирати ваги.
+- **RBAC на рівні SQL-запиту, а не пост-фільтрація** — обмежений контент фізично відсутній у тому, що бачить LLM, а не просто прихований заднім числом. Це усуває цілий клас ризиків витоку через промпт.
+- **Явна відмова замість здогадок «на краще»** — у юридичному контексті впевнена неправильна відповідь гірша за чітку відмову. Системний промпт змушує модель видати точну фразу-відмову, коли пошук не повертає нічого релевантного, а API в цьому випадку взагалі не викликає LLM.
+- **Трейси зберігаються в Postgres, а не в окремому стеку спостережуваності** — факти про вартість і якість кожного запиту (латентність по стадіях, кількість токенів, вартість у $ від провайдера, оцінки релевантності) за природою реляційні й мають високу кардинальність; для проєкту такого масштабу запити до них поряд із корпусом не потребують додаткової інфраструктури.
+- **Розширення сусідніми чанками** — кожен документ розбито на кілька чанків; факт і пов’язані з ним процедурні умови (строки, необхідні погодження) можуть опинитися в різних чанках. Підмішування сусідів чанка, що вижив (з обмеженням і зниженою релевантністю), відновлює процедурну повноту без повторного запуску пошуку.
+- **FTS із конфігурацією Postgres `'simple'`** — стандартний Postgres не має словника української стемізації. `'simple'` (точний збіг токенів, без стемізації) — задокументований, свідомий компроміс замість підключення окремого українського словника для демо-корпусу.
 
-## Corpus
+## Корпус
 
-24 synthetic Ukrainian-language documents across 6 categories — Регламенти (regulations), Посадові інструкції (job descriptions), Навчальні матеріали (training materials), Скрипти (scripts), FAQ, Внутрішні політики (internal policies) — including firm-specialization content on Art. 130 КУпАП defense work. All content was generated for this assignment; nothing is a real firm document.
+24 синтетичні документи українською мовою у 6 категоріях — Регламенти, Посадові інструкції, Навчальні матеріали, Скрипти, FAQ, Внутрішні політики — включно з матеріалами спеціалізації фірми на захисті за ст. 130 КУпАП. Весь контент згенеровано спеціально для цього завдання; жоден документ не є реальним документом фірми.
 
-## Observability
+## Спостережуваність
 
-Every chat request is traced to `kb_traces`: embedding/search/rerank latencies, prompt/completion token counts, provider-reported cost, chunk counts, top/avg relevance scores, and status (`success` / `error` / `rate_limited` / `no_answer`). The `/analytics` page surfaces running totals and recent request detail directly from this table — no separate observability stack.
+Кожен чат-запит трейситься в `kb_traces`: латентність ембедингу/пошуку/реранку, кількість токенів промпту й відповіді, вартість від провайдера, кількість чанків, максимальна та середня релевантність, а також статус (`success` / `error` / `rate_limited` / `no_answer`). Сторінка `/analytics` показує сумарні показники й деталі останніх запитів прямо з цієї таблиці — без окремого стеку спостережуваності.
 
-## Getting started
+## Початок роботи
 
 ```bash
 git clone <this-repo>
@@ -114,7 +114,7 @@ npm install
 cp .env.example .env.local   # fill in the 4 keys below
 ```
 
-`.env.local` needs:
+`.env.local` потребує:
 
 ```
 JINA_API_KEY=
@@ -123,7 +123,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Works with both legacy and new-format (`sb_secret_...`) Supabase service keys.
+Працює як зі старим, так і з новим форматом (`sb_secret_...`) сервісних ключів Supabase.
 
 ```bash
 # 1. Run supabase/migration.sql in the Supabase SQL editor
@@ -136,15 +136,15 @@ npm run ingest
 npm run dev
 ```
 
-Optional: set `GENERATOR_MODEL` to swap the generation model without a code change (defaults to `deepseek/deepseek-v4-pro` via OpenRouter).
+Опційно: встановіть `GENERATOR_MODEL`, щоб замінити модель генерації без зміни коду (за замовчуванням `deepseek/deepseek-v4-pro` через OpenRouter).
 
-## Testing
+## Тестування
 
-- **Unit tests:** `npm test` — 30/30 passing (vitest) across corpus parsing, hybrid search fusion/filtering, NDJSON framing, citation extraction, rate limiting, inline rendering.
-- **End-to-end protocol:** [`docs/test-run.md`](docs/test-run.md) — 9 live cases against a running dev server (RBAC enforcement both ways, no-answer phrase exactness, prompt-injection resistance, analytics updates): 8 PASS, 1 documented judgment call (a secondary procedural detail the generator sometimes omits from an otherwise-correct, correctly-cited answer — root-caused to generation style, not retrieval, and left as a known limitation).
+- **Юніт-тести:** `npm test` — 30/30 успішних (vitest): парсинг корпусу, злиття й фільтрація результатів гібридного пошуку, NDJSON-фреймінг, вилучення цитат, rate limiting, інлайн-рендеринг.
+- **Наскрізний протокол:** [`docs/test-run.md`](docs/test-run.md) — 9 живих кейсів на робочому dev-сервері (RBAC в обидва боки, точність фрази «немає відповіді», стійкість до prompt injection, оновлення аналітики): 8 PASS, 1 задокументований спірний випадок (другорядну процедурну деталь генератор інколи не додає до інакше правильної й коректно процитованої відповіді — причина у стилі генерації, а не в пошуку; залишено як відому обмеженість).
 
 ---
 
-Synthetic demo corpus created for this assignment; no real internal documents. Built by Volodymyr Dorosh.
+Синтетичний демо-корпус створено спеціально для цього завдання; реальних внутрішніх документів не використано. Розробив Володимир Дорош.
 
-Related production RAG work: [ask-about-dorosh.duckdns.org](https://ask-about-dorosh.duckdns.org) (hybrid search + LLM-as-judge evaluation + AWS CI/CD) — [source](https://github.com/volodeveth/supa-rag)
+Суміжний продакшн-проєкт із RAG: [ask-about-dorosh.duckdns.org](https://ask-about-dorosh.duckdns.org) (гібридний пошук + LLM-as-judge оцінювання + AWS CI/CD) — [код](https://github.com/volodeveth/supa-rag)
