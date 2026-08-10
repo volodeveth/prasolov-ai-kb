@@ -1,6 +1,6 @@
 # Prasolov AI Knowledge Base
 
-Internal AI knowledge-base assistant for a Ukrainian law firm — real hybrid RAG, role-based retrieval, and per-request observability, built over a synthetic 23-document corpus.
+Internal AI knowledge-base assistant for a Ukrainian law firm — real hybrid RAG, role-based retrieval, and per-request observability, built over a synthetic 24-document corpus.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/)
@@ -27,7 +27,7 @@ Internal AI knowledge-base assistant for a Ukrainian law firm — real hybrid RA
 ```mermaid
 flowchart TD
     subgraph Ingest["Ingestion (offline, npm run ingest)"]
-        A[23 synthetic UA legal-firm docs] --> B["Chunk: 2000 chars / 400 overlap"]
+        A[24 synthetic UA legal-firm docs] --> B["Chunk: 2000 chars / 400 overlap"]
         B --> C["Embed: Jina Embeddings v3 (1024d)"]
         C --> D[(Supabase Postgres<br/>pgvector + GIN FTS)]
     end
@@ -83,9 +83,9 @@ Access is enforced by an SQL `WHERE d.roles IS NULL OR user_role = ANY(d.roles)`
 
 | Role | Example query | Access |
 |---|---|---|
-| `partner` | "How is profit split between partners?" | Full access, including `roles: [partner]` docs (e.g. partner compensation policy) |
+| `partner` | "Who assigns the lawyer on a new case?" | Full access, including `roles: [partner]` docs (e.g. new-case assignment regulation) |
 | `lawyer` | "What do I do if a state authority calls?" | Access to `[lawyer, partner]` docs (e.g. state-authority-request script, engagement regulations) plus all unrestricted docs |
-| `assistant` | "How is profit split between partners?" | Restricted docs excluded from retrieval → explicit no-answer response |
+| `assistant` | "Who assigns the lawyer on a new case?" | Restricted docs excluded from retrieval → explicit no-answer response |
 | `hr` | "What are the per-diem rates for domestic travel?" | Full access to unrestricted HR/ops docs (FAQs, leave policy); no access to partner/lawyer-restricted docs |
 
 ## Design decisions
@@ -99,7 +99,7 @@ Access is enforced by an SQL `WHERE d.roles IS NULL OR user_role = ANY(d.roles)`
 
 ## Corpus
 
-23 synthetic Ukrainian-language documents across 6 categories — Регламенти (regulations), Посадові інструкції (job descriptions), Навчальні матеріали (training materials), Скрипти (scripts), FAQ, Внутрішні політики (internal policies) — including firm-specialization content on Art. 130 КУпАП defense work. All content was generated for this assignment; nothing is a real firm document.
+24 synthetic Ukrainian-language documents across 6 categories — Регламенти (regulations), Посадові інструкції (job descriptions), Навчальні матеріали (training materials), Скрипти (scripts), FAQ, Внутрішні політики (internal policies) — including firm-specialization content on Art. 130 КУпАП defense work. All content was generated for this assignment; nothing is a real firm document.
 
 ## Observability
 
