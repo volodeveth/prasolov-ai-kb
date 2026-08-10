@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { SourceItem } from "@/lib/ndjson";
+import { renderInline } from "@/lib/render-inline";
 
 export type MessageStatus = "retrieving" | "streaming" | "done" | "error";
 export type ErrorKind = "rate_limited" | "generic";
@@ -25,14 +26,15 @@ interface MessageProps {
 const GENERIC_ERROR_TEXT = "Щось пішло не так. Спробуйте ще раз.";
 
 /**
- * Splits assistant text on complete `[n]` markers and renders each as a
- * brass seal-chip <sup> button (design direction's signature citation
- * element) when `n` matches a known source, plain text otherwise. Because
- * this re-derives the whole segment list from the full accumulated text on
- * every render, a marker never renders as raw unstyled "[n]" even for a
- * frame — a partial "[1" mid-stream is just plain text until the closing
- * "]" arrives, at which point the very next render turns it straight into
- * the styled chip.
+ * Renders assistant text via the pure `renderInline` segmenter: `[n]`
+ * markers become a brass seal-chip <sup> button (design direction's
+ * signature citation element) when `n` matches a known source, plain "[n]"
+ * text otherwise; `**bold**` becomes <strong>. Because `renderInline`
+ * re-derives the whole segment list from the full accumulated text on every
+ * render, an unclosed marker never renders as raw unstyled "[n]" or "**"
+ * even for a frame — a partial "[1" or "**b" mid-stream is just plain text
+ * until its closing delimiter arrives, at which point the very next render
+ * turns it straight into the styled chip/strong.
  */
 function renderWithCitations(
   text: string,
@@ -40,43 +42,39 @@ function renderWithCitations(
   onCite: (source: SourceItem, opener: HTMLElement) => void
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const regex = /\[(\d{1,2})\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
   let key = 0;
 
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(text.slice(lastIndex, match.index));
+  for (const segment of renderInline(text)) {
+    if (segment.type === "text") {
+      nodes.push(segment.value);
+      continue;
     }
 
-    const n = Number(match[1]);
-    const source = sources.find((s) => s.n === n);
+    if (segment.type === "strong") {
+      nodes.push(<strong key={`strong-${key++}`}>{segment.value}</strong>);
+      continue;
+    }
 
+    // segment.type === "chip"
+    const source = sources.find((s) => s.n === segment.n);
     if (source) {
       nodes.push(
         <sup key={`cite-${key++}`}>
           <button
             type="button"
             onClick={(e) => onCite(source, e.currentTarget)}
-            aria-label={`Джерело ${n}: ${source.title}`}
+            aria-label={`Джерело ${segment.n}: ${source.title}`}
             className="mx-0.5 inline-flex -translate-y-px items-center rounded-[3px] border border-brass-deep bg-navy-800 px-1 font-data text-[11px] leading-none text-brass transition-colors duration-[120ms] hover:bg-brass hover:text-navy-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
           >
-            {n}
+            {segment.n}
           </button>
         </sup>
       );
     } else {
       // Marker doesn't match a known source (out of range, or sources
       // haven't arrived yet) — leave it as plain text.
-      nodes.push(match[0]);
+      nodes.push(`[${segment.n}]`);
     }
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    nodes.push(text.slice(lastIndex));
   }
 
   return nodes;

@@ -12,17 +12,21 @@ interface SourcePanelProps {
  * Display-only cleanup of a raw markdown chunk excerpt: strips leading
  * "#"..."######" header markers at the start of a line (the underlying
  * chunk text is a raw markdown slice, so a chunk boundary can land right on
- * a "## Section" heading) and drops stray "---" frontmatter-delimiter
- * leftover lines, then collapses the blank lines that removal leaves
- * behind. Does not touch stored data — kb_documents.content is untouched;
- * this only affects what the case-file card renders.
+ * a "## Section" heading), drops stray "---" frontmatter-delimiter leftover
+ * lines, and removes "**bold**" markers (the excerpt is a plain quote block
+ * here, not rich text, so the pair is just deleted rather than converted to
+ * <strong> the way Message.tsx does for the streamed answer). Then collapses
+ * the blank lines that removal leaves behind. Does not touch stored data —
+ * kb_documents.content is untouched; this only affects what the case-file
+ * card renders.
  */
 function cleanExcerpt(text: string): string {
   const cleaned = text
     .split("\n")
     .map((line) => line.replace(/^#{1,6}\s+/, ""))
     .filter((line) => line.trim() !== "---")
-    .join("\n");
+    .join("\n")
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1");
   return cleaned.replace(/\n{3,}/g, "\n\n").trim();
 }
 

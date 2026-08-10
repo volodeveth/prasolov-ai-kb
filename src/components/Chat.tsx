@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRole } from "@/lib/roles";
 import { NdjsonParser, type ChatEvent, type SourceItem } from "@/lib/ndjson";
 import { Message, type ChatMessage } from "@/components/Message";
@@ -46,6 +46,17 @@ export function Chat() {
   const [busy, setBusy] = useState(false);
   const [drawerSource, setDrawerSource] = useState<SourceItem | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  // Tracks the in-flight request's AbortController so navigating away (or
+  // this component unmounting) mid-stream can cancel it — without this the
+  // server's own req.signal-based cancellation (Task 6) never fires, and
+  // the LLM keeps generating/billing for a client that's already gone.
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   function handleCite(source: SourceItem, opener: HTMLElement) {
     openerRef.current = opener;
@@ -64,6 +75,9 @@ export function Chat() {
 
     setBusy(true);
     setInput("");
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -117,6 +131,7 @@ export function Chat() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, role }),
+        signal: controller.signal,
       });
 
       if (res.status === 429) {
@@ -149,12 +164,20 @@ export function Chat() {
       }
       for (const event of parser.flush()) applyEvent(event);
     } catch (err) {
+      // Unmount/navigation cancelled the request via abortControllerRef —
+      // stop cleanly, no error banner, leave whatever answer text streamed
+      // in so far exactly as-is.
+      if (controller.signal.aborted) return;
+
       patchAssistant({
         status: "error",
         errorKind: "generic",
         errorMessage: err instanceof Error ? err.message : GENERIC_ERROR_MESSAGE,
       });
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setBusy(false);
     }
   }
