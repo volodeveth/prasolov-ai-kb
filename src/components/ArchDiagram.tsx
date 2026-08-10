@@ -150,68 +150,76 @@ export function ArchDiagram() {
   const connectorY2 = lane3[0].y;
 
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-      role="img"
-      aria-label="Схема пайплайна: інжест документів, обробка запиту з RBAC та реранкінгом, спостережуваність через трейси"
-      className="w-full"
-    >
-      <defs>
-        <marker
-          id="arch-arrow"
-          viewBox="0 0 10 10"
-          refX="8"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path d="M0,0 L10,5 L0,10 z" style={{ fill: "var(--ivory-dim)" }} />
-        </marker>
-      </defs>
-
-      <LaneTitle x={lane1[0].x} y={LANE1_TITLE_Y}>
-        Інжест
-      </LaneTitle>
-      {lane1.map((box, i) => (
-        <Box key={i} box={box} />
-      ))}
-      <RowArrows row={lane1} />
-
-      <LaneTitle x={lane2[0].x} y={LANE2_TITLE_Y}>
-        Запит
-      </LaneTitle>
-      {lane2.map((box, i) => (
-        <Box key={i} box={box} />
-      ))}
-      <RowArrows row={lane2} />
-
-      <LaneTitle x={lane3[0].x} y={LANE3_TITLE_Y}>
-        Спостережуваність
-      </LaneTitle>
-      {lane3.map((box, i) => (
-        <Box key={i} box={box} />
-      ))}
-      <RowArrows row={lane3} />
-
-      <line
-        x1={connectorX1}
-        y1={connectorY1}
-        x2={connectorX2}
-        y2={connectorY2 - 4}
-        style={{ stroke: "var(--ivory-dim)" }}
-        strokeWidth={1.5}
-        strokeDasharray="4 4"
-        markerEnd="url(#arch-arrow)"
-      />
-      <text
-        x={connectorX1 + 10}
-        y={(connectorY1 + connectorY2) / 2 + 4}
-        className="font-body"
-        style={{ fill: "var(--ivory-dim)", fontSize: 15 }}
+    // Same pattern as the recent-queries table in AnalyticsView: the SVG
+    // scales fluidly down to a floor (min-w-[900px] on the 1200-wide
+    // viewBox keeps text no smaller than ~12px), then this wrapper takes
+    // over with a horizontal scrollbar instead of shrinking labels further.
+    // At desktop widths (card content ~928px+) the floor is never hit, so
+    // the diagram still renders at 100% width with no scrollbar.
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+        role="img"
+        aria-label="Схема пайплайна: інжест документів, обробка запиту з RBAC та реранкінгом, спостережуваність через трейси"
+        className="w-full min-w-[900px]"
       >
-        кожен запит трейситься
-      </text>
-    </svg>
+        <defs>
+          <marker
+            id="arch-arrow"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L10,5 L0,10 z" style={{ fill: "var(--ivory-dim)" }} />
+          </marker>
+        </defs>
+
+        <LaneTitle x={lane1[0].x} y={LANE1_TITLE_Y}>
+          Інжест
+        </LaneTitle>
+        {lane1.map((box, i) => (
+          <Box key={i} box={box} />
+        ))}
+        <RowArrows row={lane1} />
+
+        <LaneTitle x={lane2[0].x} y={LANE2_TITLE_Y}>
+          Запит
+        </LaneTitle>
+        {lane2.map((box, i) => (
+          <Box key={i} box={box} />
+        ))}
+        <RowArrows row={lane2} />
+
+        <LaneTitle x={lane3[0].x} y={LANE3_TITLE_Y}>
+          Спостережуваність
+        </LaneTitle>
+        {lane3.map((box, i) => (
+          <Box key={i} box={box} />
+        ))}
+        <RowArrows row={lane3} />
+
+        <line
+          x1={connectorX1}
+          y1={connectorY1}
+          x2={connectorX2}
+          y2={connectorY2 - 4}
+          style={{ stroke: "var(--ivory-dim)" }}
+          strokeWidth={1.5}
+          strokeDasharray="4 4"
+          markerEnd="url(#arch-arrow)"
+        />
+        <text
+          x={connectorX1 + 10}
+          y={(connectorY1 + connectorY2) / 2 + 4}
+          className="font-body"
+          style={{ fill: "var(--ivory-dim)", fontSize: 15 }}
+        >
+          кожен запит трейситься
+        </text>
+      </svg>
+    </div>
   );
 }

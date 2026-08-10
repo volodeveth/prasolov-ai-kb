@@ -22,15 +22,24 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("uk-UA", {
   day: "2-digit",
 });
 
-function formatChunkCount(n: number): string {
+// Ukrainian plural agreement (one/few/many) — e.g. 1 фрагмент, 2 фрагменти,
+// 5 фрагментів — shared by every count label on this page so the rule lives
+// in exactly one place.
+function pluralizeUk(n: number, [one, few, many]: [string, string, string]): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
-  let word = "фрагментів";
-  if (mod100 < 11 || mod100 > 14) {
-    if (mod10 === 1) word = "фрагмент";
-    else if (mod10 >= 2 && mod10 <= 4) word = "фрагменти";
-  }
-  return `${n} ${word}`;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
+
+function formatChunkCount(n: number): string {
+  return `${n} ${pluralizeUk(n, ["фрагмент", "фрагменти", "фрагментів"])}`;
+}
+
+function formatDocumentCount(n: number): string {
+  return `${n} ${pluralizeUk(n, ["документ", "документи", "документів"])}`;
 }
 
 function accessLabel(roles: Role[] | null): string {
@@ -125,7 +134,7 @@ export function KnowledgeView() {
       <h1>База знань</h1>
       <p className="mt-2 font-body text-[15px] text-ivory-dim">
         {documents
-          ? `${documents.length} документів · роль: ${ROLE_LABELS[role]}`
+          ? `${formatDocumentCount(documents.length)} · роль: ${ROLE_LABELS[role]}`
           : "Завантаження…"}
       </p>
 
