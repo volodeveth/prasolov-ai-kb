@@ -82,3 +82,15 @@ language sql as $$
   from rrf join kb_chunks c on c.id = rrf.id join allowed a on a.id = c.doc_id
   order by rrf.score desc limit match_count;
 $$;
+
+-- Enable Row Level Security. The app only ever talks to Supabase through
+-- the service role key (see src/lib/supabase.ts createServiceClient()),
+-- which bypasses RLS entirely, so this has no effect on app behavior —
+-- it closes the gap where the anon/public key, if it ever leaked or got
+-- wired into a client-side call, could otherwise read these tables
+-- directly. No policies are defined, so with RLS on and no anon grants,
+-- non-service-role access sees nothing. Re-running ENABLE ROW LEVEL
+-- SECURITY is a no-op when it's already on, so this stays idempotent.
+alter table kb_documents enable row level security;
+alter table kb_chunks enable row level security;
+alter table kb_traces enable row level security;

@@ -52,6 +52,24 @@ export function buildMessages(
   ];
 }
 
+/**
+ * Splits a growing text buffer into complete lines, keeping any trailing
+ * partial line for the next call. Pure and network-free so the SSE parsing
+ * loop below can be unit-tested without a live stream: a `data: {...}`
+ * frame that straddles two TCP chunks — previously silently dropped
+ * (losing mid-answer text, or zeroing out tokens/cost if it was the final
+ * usage frame) — is exactly the case this exists to handle.
+ */
+export function splitSseLines(
+  buffer: string,
+  chunk: string
+): { lines: string[]; remainder: string } {
+  const combined = buffer + chunk;
+  const parts = combined.split("\n");
+  const remainder = parts.pop() ?? "";
+  return { lines: parts, remainder };
+}
+
 interface LlmStreamResult {
   stream: ReadableStream;
   getUsage: () => {
@@ -105,40 +123,59 @@ export async function generateAnswerStream(
   let promptTokens = 0;
   let completionTokens = 0;
   let costUsd: number | null = null;
+  let sseBuffer = "";
+
+  // Returns true when this line signals end-of-stream ("[DONE]").
+  function handleLine(
+    line: string,
+    controller: ReadableStreamDefaultController<Uint8Array>
+  ): boolean {
+    if (!line.startsWith("data: ")) return false;
+    const data = line.slice(6);
+    if (data === "[DONE]") return true;
+    try {
+      const json = JSON.parse(data);
+      const content = json.choices?.[0]?.delta?.content;
+      if (content) {
+        controller.enqueue(new TextEncoder().encode(content));
+      }
+      // Capture usage from the final chunk (OpenRouter includes it)
+      if (json.usage) {
+        promptTokens = json.usage.prompt_tokens ?? 0;
+        completionTokens = json.usage.completion_tokens ?? 0;
+        // Provider-reported cost beats any local rate table: it cannot
+        // drift when the provider reprices or routes to another host.
+        costUsd =
+          typeof json.usage.cost === "number" ? json.usage.cost : null;
+      }
+    } catch {
+      // skip malformed chunks
+    }
+    return false;
+  }
 
   const stream = new ReadableStream({
     async pull(controller) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
+          // Flush the decoder's own pending bytes plus whatever partial
+          // line we were still holding — a frame with no trailing newline
+          // before the connection closes must not be silently dropped.
+          sseBuffer += decoder.decode();
+          const finalLine = sseBuffer.trim();
+          sseBuffer = "";
+          if (finalLine) handleLine(finalLine, controller);
           controller.close();
           return;
         }
         const text = decoder.decode(value, { stream: true });
-        const lines = text.split("\n").filter((l) => l.startsWith("data: "));
+        const { lines, remainder } = splitSseLines(sseBuffer, text);
+        sseBuffer = remainder;
         for (const line of lines) {
-          const data = line.slice(6);
-          if (data === "[DONE]") {
+          if (handleLine(line, controller)) {
             controller.close();
             return;
-          }
-          try {
-            const json = JSON.parse(data);
-            const content = json.choices?.[0]?.delta?.content;
-            if (content) {
-              controller.enqueue(new TextEncoder().encode(content));
-            }
-            // Capture usage from the final chunk (OpenRouter includes it)
-            if (json.usage) {
-              promptTokens = json.usage.prompt_tokens ?? 0;
-              completionTokens = json.usage.completion_tokens ?? 0;
-              // Provider-reported cost beats any local rate table: it cannot
-              // drift when the provider reprices or routes to another host.
-              costUsd =
-                typeof json.usage.cost === "number" ? json.usage.cost : null;
-            }
-          } catch {
-            // skip malformed chunks
           }
         }
       }

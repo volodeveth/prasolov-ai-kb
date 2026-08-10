@@ -62,14 +62,18 @@ export async function GET() {
   const sortedTotalMs = [...totalMsValues].sort((a, b) => a - b);
   const p95TotalMs = percentile95(sortedTotalMs);
 
+  // cost_usd is billed whenever an LLM call actually ran, regardless of
+  // outcome — since the no-answer hotfix (2c3cd0b), that includes traces
+  // where retrieval found chunks but the model itself refused (status
+  // "no_answer"), not just "success". The denominator must match: average
+  // over every trace that carries a cost, not just the successful ones,
+  // or avgCostUsd inflates (numerator counts no_answer cost, denominator
+  // didn't).
   const costValues = traces
     .map((t) => t.cost_usd)
     .filter((v): v is number => v !== null && v !== undefined);
   const totalCostUsd = costValues.reduce((sum, v) => sum + v, 0);
-  const successWithCostCount = traces.filter(
-    (t) => t.status === "success" && t.cost_usd !== null && t.cost_usd !== undefined
-  ).length;
-  const avgCostUsd = successWithCostCount > 0 ? totalCostUsd / successWithCostCount : 0;
+  const avgCostUsd = costValues.length > 0 ? totalCostUsd / costValues.length : 0;
 
   const recent = traces.slice(0, RECENT_SIZE).map((t) => ({
     query: t.query,

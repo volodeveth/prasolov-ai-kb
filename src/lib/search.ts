@@ -144,12 +144,13 @@ export interface RetrieveResult {
 }
 
 /**
- * Retrieval orchestration: embed the query, run hybrid search (BM25 +
- * vector, RRF-fused) scoped to the caller's role, then rerank down to the
- * top few chunks. When a real rerank ran, chunks below MIN_RELEVANCE_SCORE
- * are dropped as noise — better to answer from fewer, more relevant chunks
- * than pad the context. See filterByRelevance() for why that threshold is
- * skipped when rerankChunks() short-circuited instead of scoring.
+ * Retrieval orchestration: embed the query, run hybrid search (FTS
+ * (ts_rank_cd) + vector, RRF-fused) scoped to the caller's role, then rerank
+ * down to the top few chunks. When a real rerank ran, chunks below
+ * MIN_RELEVANCE_SCORE are dropped as noise — better to answer from fewer,
+ * more relevant chunks than pad the context. See filterByRelevance() for why
+ * that threshold is skipped when rerankChunks() short-circuited instead of
+ * scoring.
  */
 export async function retrieve(
   query: string,
