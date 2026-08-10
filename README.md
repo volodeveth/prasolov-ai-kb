@@ -7,7 +7,7 @@ Internal AI knowledge-base assistant for a Ukrainian law firm — real hybrid RA
 [![Supabase](https://img.shields.io/badge/Supabase-pgvector-3ECF8E?logo=supabase)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38BDF8?logo=tailwindcss)](https://tailwindcss.com/)
 
-**Live demo:** [prasolov-ai-kb.vercel.app](https://prasolov-ai-kb.vercel.app) *(placeholder — will be confirmed/updated once deployed)*
+**Live demo:** [prasolov-ai-kb.vercel.app](https://prasolov-ai-kb.vercel.app)
 
 > Built as a test assignment for **Prasolov & Partners**, an Art. 130 КУпАП (driving-under-influence administrative offense) defense firm. The corpus (regulations, job descriptions, scripts, FAQs, policies) is entirely synthetic — no real firm documents were used.
 

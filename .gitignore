@@ -54,3 +54,6 @@ supabase/.temp/
 monitor.txt
 11.txt
 scripts/project-docs-2026/
+
+.vercel
+.env*
