@@ -75,3 +75,14 @@ small {
   outline: 2px solid var(--brass);
   outline-offset: 2px;
 }
+
+/* Hides the scrollbar widget on horizontally-scrollable containers (e.g. the
+   mobile nav tab strip) while keeping the element scrollable by touch/wheel. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

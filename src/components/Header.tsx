@@ -17,7 +17,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-navy-700 bg-navy-900">
-      <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-2.5">
+      <div className="mx-auto flex max-w-7xl items-center gap-4 px-6 py-2.5">
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2.5 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
@@ -29,7 +29,7 @@ export function Header() {
             height={36}
             className="h-9 w-auto"
           />
-          <span className="hidden flex-col leading-tight sm:flex">
+          <span className="hidden flex-col leading-tight xl:flex">
             <span className="font-display text-[15px] font-semibold text-ivory">
               Прасолов та Партнери
             </span>
@@ -41,7 +41,7 @@ export function Header() {
 
         <nav
           aria-label="Основна навігація"
-          className="flex flex-1 items-end gap-1 self-stretch overflow-x-auto"
+          className="scrollbar-hide flex flex-1 items-end gap-1 self-stretch overflow-x-auto"
         >
           {NAV_ITEMS.map((item) => {
             const active =
@@ -68,7 +68,7 @@ export function Header() {
         <div className="flex shrink-0 items-center gap-3">
           <RoleSwitcher />
           <RoleSwitcherMobile />
-          <span className="hidden rounded-full border border-navy-700 px-2.5 py-1 font-body text-[11px] text-ivory-dim md:inline-block">
+          <span className="hidden rounded-full border border-navy-700 px-2.5 py-1 font-body text-[11px] text-ivory-dim lg:inline-block">
             Демо · синтетичні дані
           </span>
         </div>
