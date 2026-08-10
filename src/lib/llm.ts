@@ -54,7 +54,10 @@ interface LlmStreamResult {
   };
 }
 
-export async function generateAnswerStream(messages: Message[]): Promise<LlmStreamResult> {
+export async function generateAnswerStream(
+  messages: Message[],
+  signal?: AbortSignal
+): Promise<LlmStreamResult> {
   const response = await fetch(
     "https://openrouter.ai/api/v1/chat/completions",
     {
@@ -78,6 +81,7 @@ export async function generateAnswerStream(messages: Message[]): Promise<LlmStre
         // Ask for token counts *and* the provider's own cost on the last chunk.
         usage: { include: true },
       }),
+      signal,
     }
   );
 

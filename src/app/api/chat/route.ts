@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { retrieve, type Role } from "@/lib/search";
+import { retrieve, type Role, type RankedChunk } from "@/lib/search";
 import { ROLES } from "@/lib/corpus";
 import { buildMessages, generateAnswerStream } from "@/lib/llm";
 import { extractCitedIndexes } from "@/lib/citations";
 import { hashIp, checkRateLimit } from "@/lib/rate-limit";
-import { writeTrace } from "@/lib/tracer";
+import { writeTrace, type KbTrace } from "@/lib/tracer";
 
 // Streaming LLM calls can run well past the platform's default timeout.
 export const maxDuration = 60;
@@ -94,6 +94,38 @@ export async function POST(req: Request) {
 
   const traceId = randomUUID();
 
+  // Owns cancellation of the (expensive, metered) LLM generation call. Wired
+  // to the outer stream's cancel() below so a client that walks away mid-answer
+  // doesn't leave OpenRouter billing for tokens nobody will read.
+  const abortController = new AbortController();
+  // Belt-and-suspenders: the incoming Request's own signal (tied to the
+  // underlying connection) can fire before the outer ReadableStream's
+  // cancel() does, since cancel() only fires once something tries to write
+  // to the closed socket and gets backpressure.
+  if (req.signal.aborted) {
+    abortController.abort(req.signal.reason);
+  } else {
+    req.signal.addEventListener(
+      "abort",
+      () => abortController.abort(req.signal.reason),
+      { once: true }
+    );
+  }
+  let innerReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
+  // Hoisted above the try so a failure *after* retrieval still has real
+  // stage timings/sources to trace, instead of losing them to block scope.
+  let chunks: RankedChunk[] = [];
+  let timings = { embedding_ms: 0, search_ms: 0, rerank_ms: 0 };
+  let sources: SourceOut[] = [];
+  let traceWritten = false;
+
+  async function writeTraceOnce(fields: Partial<KbTrace>) {
+    if (traceWritten) return;
+    traceWritten = true;
+    await writeTrace(fields);
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
       const safeEnqueue = (obj: unknown) => {
@@ -112,9 +144,12 @@ export async function POST(req: Request) {
       };
 
       try {
-        const { chunks, timings, empty } = await retrieve(query, role);
+        const retrieved = await retrieve(query, role);
+        chunks = retrieved.chunks;
+        timings = retrieved.timings;
+        const empty = retrieved.empty;
 
-        const sources: SourceOut[] = chunks.map((c, i) => ({
+        sources = chunks.map((c, i) => ({
           n: i + 1,
           title: c.title,
           category: c.category,
@@ -129,7 +164,7 @@ export async function POST(req: Request) {
           safeEnqueue({ type: "done", citedIndexes: [], totalMs });
           safeClose();
 
-          await writeTrace({
+          await writeTraceOnce({
             trace_id: traceId,
             role,
             query,
@@ -150,13 +185,17 @@ export async function POST(req: Request) {
         }
 
         const messages = buildMessages(query, chunks);
-        const { stream: llmStream, getUsage } = await generateAnswerStream(messages);
+        const { stream: llmStream, getUsage } = await generateAnswerStream(
+          messages,
+          abortController.signal
+        );
 
         const llmStart = Date.now();
         let llmTtfbMs: number | null = null;
         let answer = "";
 
         const reader = llmStream.getReader();
+        innerReader = reader;
         const decoder = new TextDecoder();
         while (true) {
           const { done, value } = await reader.read();
@@ -170,6 +209,35 @@ export async function POST(req: Request) {
             answer += text;
             safeEnqueue({ type: "token", v: text });
           }
+        }
+
+        innerReader = null;
+
+        // reader.cancel() (called from the outer stream's cancel() below)
+        // resolves the pending read with {done: true} rather than rejecting
+        // it — indistinguishable from a normal end-of-stream unless we also
+        // check the abort flag here. Without this check a disconnect mid
+        // answer would misrecord as a clean "success" trace with a
+        // truncated answer and no usage/cost data.
+        if (abortController.signal.aborted) {
+          await writeTraceOnce({
+            trace_id: traceId,
+            role,
+            query,
+            answer,
+            sources,
+            embedding_ms: timings.embedding_ms,
+            search_ms: timings.search_ms,
+            rerank_ms: timings.rerank_ms,
+            llm_ttfb_ms: llmTtfbMs,
+            total_ms: Date.now() - requestStart,
+            chunks_found: chunks.length,
+            chunks_reranked: chunks.length,
+            status: "error",
+            error_message: "client_disconnected",
+            ip_hash: ipHash,
+          });
+          return;
         }
 
         const llmTotalMs = Date.now() - llmStart;
@@ -188,7 +256,7 @@ export async function POST(req: Request) {
           ? relevanceScores.reduce((sum, s) => sum + s, 0) / relevanceScores.length
           : null;
 
-        await writeTrace({
+        await writeTraceOnce({
           trace_id: traceId,
           role,
           query,
@@ -211,19 +279,46 @@ export async function POST(req: Request) {
           ip_hash: ipHash,
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        safeEnqueue({ type: "error", message });
-        safeClose();
+        const wasAborted =
+          abortController.signal.aborted ||
+          (err instanceof Error && err.name === "AbortError");
+        const message = wasAborted
+          ? "client_disconnected"
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
 
-        await writeTrace({
+        // A disconnect means nobody can receive an error/done line — the
+        // controller is already cancelled, so only the trace matters here.
+        if (!wasAborted) {
+          safeEnqueue({ type: "error", message });
+          safeClose();
+        }
+
+        await writeTraceOnce({
           trace_id: traceId,
           role,
           query,
+          sources,
+          embedding_ms: timings.embedding_ms,
+          search_ms: timings.search_ms,
+          rerank_ms: timings.rerank_ms,
+          chunks_found: chunks.length,
+          chunks_reranked: chunks.length,
           status: "error",
           error_message: message,
           total_ms: Date.now() - requestStart,
           ip_hash: ipHash,
         });
+      }
+    },
+    cancel(reason) {
+      // Fires when the client disconnects (the runtime cancels the stream
+      // it's piping to the closed connection). Stop paying OpenRouter for
+      // tokens nobody will read, and stop reading its stream.
+      abortController.abort(reason);
+      if (innerReader) {
+        innerReader.cancel(reason).catch(() => {});
       }
     },
   });
