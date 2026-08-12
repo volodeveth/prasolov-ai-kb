@@ -57,3 +57,4 @@ scripts/project-docs-2026/
 
 .vercel
 .env*
+CLAUDE.md
